@@ -1,0 +1,66 @@
+import csv
+import boto3
+from boto3.dynamodb.conditions import Key, Attr
+from datetime import datetime
+import os
+import json
+import os.path
+from os import path
+
+client = boto3.client('dynamodb')
+s3 = boto3.client('s3')
+
+
+csvFileName = "/tmp/dbrecords.csv"
+
+def dump_table(table_name):
+    last_evaluated_key = None
+    while True:
+        if last_evaluated_key:
+            response = client.scan(
+                TableName=table_name,
+                ProjectionExpression="field1,field2,field3",
+                ExclusiveStartKey=last_evaluated_key
+            )
+        else: 
+            response = client.scan(TableName=table_name,ProjectionExpression="field1,field2,field3")
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        
+        
+        if len(response['Items']) != 0:
+
+            items = response['Items']
+            # Here we get the keys of the first object in items.
+            # We will use these keys for the headers/columns for our csv.
+            fnames = [field1,field2,field3"]
+            for i in items:
+              data= i['S']
+              values ={"field1":data['field1'], "field2":data['field2'],"field3":data['field3']}
+              with open(csvFileName, 'a') as f:
+                  dict_writer = csv.DictWriter(f, fieldnames=fnames)
+                  # Here we check to see if its the first write.
+                  if f.tell() == 0:
+                      dict_writer.writeheader()
+                      dict_writer.writerow(values)
+                  else:
+                      dict_writer.writerow(values)
+              f.close()
+
+        if not last_evaluated_key:
+            break
+    # Here we save a backup copy of the csv file in S3
+    print ("File exists:"+str(path.exists(csvFileName)))
+    with open(csvFileName, 'rb') as data:
+        s3.upload_fileobj(data, 'extrepdbdump', 'dbdump.csv')
+        
+    return True
+
+# do something with data
+
+def lambda_handler(event, context):
+    # TODO implement
+    dump_table('<your Dynamo DB Table Name>')
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }
